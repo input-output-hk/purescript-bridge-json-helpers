@@ -149,6 +149,18 @@ let
         installPhase = "ln -s $src $out";
       };
 
+    "exceptions" = pkgs.stdenv.mkDerivation {
+        name = "exceptions";
+        version = "v5.0.0";
+        src = pkgs.fetchgit {
+          url = "https://github.com/purescript/purescript-exceptions.git";
+          rev = "410d0b8813592bda3c25028540eeb2cda312ddc9";
+          sha256 = "1yjbrx34a0rnxgpvywb63n9jzhkdgb2q2acyzbwh290mrrggc95x";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
     "exists" = pkgs.stdenv.mkDerivation {
         name = "exists";
         version = "v5.1.0";
@@ -480,6 +492,18 @@ let
           url = "https://github.com/purescript/purescript-tailrec.git";
           rev = "5fbf0ac05dc6ab1a228b2897630195eb7483b962";
           sha256 = "1jjl2q2hyhjcdxpamzr1cdlxhmq2bl170x5p3jajb9zgwkqx0x22";
+        };
+        phases = "installPhase";
+        installPhase = "ln -s $src $out";
+      };
+
+    "transformers" = pkgs.stdenv.mkDerivation {
+        name = "transformers";
+        version = "v5.2.0";
+        src = pkgs.fetchgit {
+          url = "https://github.com/purescript/purescript-transformers.git";
+          rev = "1e5d4193b38c613c97ea1ebdb721c6b94cd8c50a";
+          sha256 = "0lggimnq016v98ib6h68gnciraambxrfqm2s033wm34srcy8xs06";
         };
         phases = "installPhase";
         installPhase = "ln -s $src $out";
