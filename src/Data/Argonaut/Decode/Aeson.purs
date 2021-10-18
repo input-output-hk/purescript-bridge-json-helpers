@@ -1,20 +1,26 @@
 module Data.Argonaut.Decode.Aeson
   ( class RowListDecoder
+  , class ToTupleDecoder
   , Decoder
   , either
   , enum
-  , hoistTuple
   , maybe
   , record
   , rowListDecoder
   , sumType
+  , toTupleDecoder
   , tuple
+  , tupleApply
+  , tupleConjoin
+  , tupleMap
   , unit
   , value
+  , (</\>)
+  , (</*\>)
+  , (</$\>)
   ) where
 
 import Prelude hiding (unit)
-import Prelude (unit) as P
 
 import Control.Alt ((<|>))
 import Control.Monad.RWS (RWSResult(..), RWST(..), evalRWST)
@@ -26,15 +32,17 @@ import Data.Argonaut.Decode.Decoders (decodeArray, decodeJArray, decodeJObject, 
 import Data.Argonaut.Encode.Encoders (encodeString)
 import Data.Array (find, index)
 import Data.Bifunctor (lmap)
-import Data.Divide (divided)
 import Data.Either (Either(..))
+import Data.Enum (class Enum, upFromIncluding)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Symbol (class IsSymbol, reflectSymbol)
 import Data.Tuple (Tuple(..), fst)
+import Data.Tuple.Nested (type (/\))
 import Foreign.Object (Object)
 import Foreign.Object as Obj
+import Prelude (unit) as P
 import Prim.Row as R
 import Prim.RowList (class RowToList, Cons, Nil)
 import Record as Rec
@@ -44,7 +52,23 @@ type Decoder = ReaderT Json (Either JsonDecodeError)
 type JPropDecoder = ReaderT (Object Json) (Either JsonDecodeError)
 type TupleDecoder = RWST (Array Json) Unit Int (Either JsonDecodeError)
 
-infixr 4 divided as >*<
+class ToTupleDecoder f where
+  toTupleDecoder :: forall a. f a -> TupleDecoder a
+
+instance toTupleDecoderDecoder :: ToTupleDecoder (ReaderT Json (Either JsonDecodeError)) where
+  toTupleDecoder decoder =
+    RWST \arr i ->
+      RWSResult
+        (i + 1)
+        <$>
+          ( lmap (AtIndex i)
+            $ runReaderT decoder
+            =<< maybeToEither MissingValue (index arr i)
+          )
+        <*> pure P.unit
+
+instance toTupleDecoderTupleDecoder :: ToTupleDecoder (RWST (Array Json) Unit Int (Either JsonDecodeError)) where
+  toTupleDecoder = identity
 
 class RowListDecoder :: forall k. k -> Row Type -> Row Type -> Constraint
 class RowListDecoder rl ri ro | rl -> ri ro where
@@ -102,10 +126,12 @@ either decoderA decoderB = ReaderT $ decodeJObject >=>
   decodeLeft obj = obj .: leftProp >>= runReaderT decoderA
   decodeRight obj = obj .: rightProp >>= runReaderT decoderB
 
-enum :: forall a. Show a => Array a -> Decoder a
-enum values = ReaderT \json -> do
+enum :: forall a. Enum a => Bounded a => Show a => Decoder a
+enum = ReaderT \json -> do
   v <- decodeString json
-  maybeToEither (UnexpectedValue json) $ find ((v == _) <<< show) values
+  maybeToEither (UnexpectedValue json)
+    $ find ((v == _) <<< show)
+    $ upFromIncluding bottom
 
 sumType :: forall a. Map String (Decoder a) -> Decoder a
 sumType decoders = ReaderT \json -> do
@@ -131,20 +157,24 @@ record name decoders =
         <<< runReaderT (rowListDecoder (Proxy :: _ rl) decoders)
         <=< decodeJObject
 
-hoistTuple :: forall a. Decoder a -> TupleDecoder a
-hoistTuple decoder =
-  RWST \arr i ->
-    RWSResult
-      (i + 1)
-      <$>
-        ( lmap (AtIndex i) $ runReaderT decoder =<< maybeToEither MissingValue
-            (index arr i)
-        )
-      <*> pure P.unit
+tupleMap :: forall f a b. ToTupleDecoder f => (a -> b) -> f a -> TupleDecoder b
+tupleMap f a = f <$> toTupleDecoder a
+
+infixl 3 tupleMap as </$\>
+
+tupleApply :: forall f a b. ToTupleDecoder f => TupleDecoder (a -> b) -> f a -> TupleDecoder b
+tupleApply f a = f <*> toTupleDecoder a
+
+infixl 3 tupleApply as </*\>
+
+tupleConjoin :: forall f a b. ToTupleDecoder f => Decoder a -> f b -> TupleDecoder (a /\ b)
+tupleConjoin d1 d2 = Tuple <$> toTupleDecoder d1 <*> toTupleDecoder d2
 
 tuple :: forall a. TupleDecoder a -> Decoder a
 tuple decoder = ReaderT $ map fst <<< flip (evalRWST decoder) 0 <=<
   decodeJArray
+
+infixr 6 tupleConjoin as </\>
 
 unit :: Decoder Unit
 unit = ReaderT \json -> P.unit <$ decodeArray
