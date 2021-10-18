@@ -10,6 +10,7 @@ module Data.Argonaut.Encode.Aeson
   , record
   , rowListEncoder
   , sumType
+  , tagged
   , tuple
   , toTupleEncoder
   , tupleDivided
@@ -17,6 +18,7 @@ module Data.Argonaut.Encode.Aeson
   , value
   , (>*<)
   , (>$<)
+  , (>|<)
   , (>/\<)
   ) where
 
@@ -27,6 +29,7 @@ import Data.Argonaut.Core (Json, fromArray, fromObject, jsonEmptyArray, jsonEmpt
 import Data.Argonaut.Encode (class EncodeJson, encodeJson, (:=), (~>))
 import Data.Argonaut.Encode.Encoders (encodeString)
 import Data.Array as Array
+import Data.Decide (chosen)
 import Data.Divide (divided)
 import Data.Either (Either(..))
 import Data.Functor.Contravariant (cmap)
@@ -45,9 +48,12 @@ import Type.Prelude (Proxy(..))
 
 type Encoder = Op Json
 type JPropEncoder = Op (Object (Last Json))
+type SumTypeEncoder = Op (Tuple String (Last Json))
 type TupleEncoder = Op (Array Json)
 
 infixr 4 divided as >*<
+
+infixr 4 chosen as >|<
 
 infixr 4 cmap as >$<
 
@@ -109,13 +115,12 @@ either encoderA encoderB = Op case _ of
 enum :: forall a. Show a => Encoder a
 enum = Op $ encodeString <<< show
 
-sumType
-  :: forall a
-   . (a -> forall r. (forall p. String /\ p /\ (Encoder p) -> r) -> r)
-  -> Encoder a
-sumType getEncoder = Op \a ->
-  getEncoder a \(tag /\ contents /\ encoder) ->
-    tagProp := tag ~> contentsProp := encode encoder contents ~> jsonEmptyObject
+tagged :: forall a. String -> Encoder a -> SumTypeEncoder a
+tagged tag = mapEncoder $ Tuple tag <<< Last
+
+sumType :: forall a. SumTypeEncoder a -> Encoder a
+sumType = mapEncoder \(tag /\ Last contents) ->
+  tagProp := tag ~> contentsProp := contents ~> jsonEmptyObject
 
 record
   :: forall rl ro ri
@@ -124,9 +129,11 @@ record
   => Record ri
   -> Encoder (Record ro)
 record encoders =
-  mapEncoder (fromObject <<< map unwrap) $ rowListEncoder (Proxy :: _ rl) encoders
+  mapEncoder (fromObject <<< map unwrap) $ rowListEncoder (Proxy :: _ rl)
+    encoders
 
-tupleDivided :: forall f a b. ToTupleEncoder f => Encoder a -> f b -> TupleEncoder (a /\ b)
+tupleDivided
+  :: forall f a b. ToTupleEncoder f => Encoder a -> f b -> TupleEncoder (a /\ b)
 tupleDivided encoder = divided (toTupleEncoder encoder) <<< toTupleEncoder
 
 infixr 6 tupleDivided as >/\<

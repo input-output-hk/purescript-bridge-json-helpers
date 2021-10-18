@@ -2,26 +2,25 @@ module Test.Main where
 
 import Prelude
 
+import Control.Alt ((<|>))
 import Control.Monad.Reader (runReaderT)
 import Data.Argonaut.Decode.Aeson (Decoder, (</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode.Aeson (Encoder, (>$<), (>/\<))
+import Data.Argonaut.Encode.Aeson (Encoder, (>$<), (>/\<), (>|<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Either (Either(..))
 import Data.Enum (class BoundedEnum, class Enum, Cardinality(..))
 import Data.Enum.Generic (genericPred, genericSucc)
 import Data.Generic.Rep (class Generic)
-import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (un)
 import Data.Op (Op(..))
 import Data.Show.Generic (genericShow)
-import Data.Tuple (Tuple(..))
+import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
 import Effect.Aff (launchAff_)
-import Effect.Class (liftEffect)
 import Test.QuickCheck (class Arbitrary, (===))
 import Test.QuickCheck.Arbitrary (genericArbitrary)
 import Test.QuickCheck.Gen (enum)
@@ -113,16 +112,19 @@ main = launchAff_ $ runSpec [ consoleReporter ] do
     roundtripSpec
       (D.record "Test" { foo: D.maybe intDecoder, bar: stringDecoder })
       (E.record { foo: E.maybe intEncoder, bar: stringEncoder })
-  describe "sumType" $
+  describe "sumType" do
+    let
+      toEither (Foo a) = Left a
+      toEither (Bar a) = Right a
     roundtripSpec
-      ( D.sumType $ Map.fromFoldable
-          [ Tuple "Foo" $ Foo <$> stringDecoder
-          , Tuple "Bar" $ Bar <$> intDecoder
-          ]
+      ( D.sumType "SumType"
+          $ D.tagged "Foo" (Foo <$> stringDecoder)
+              <|> D.tagged "Bar" (Bar <$> intDecoder)
       )
-      ( E.sumType case _ of
-          Foo a -> \k -> k $ "Foo" /\ a /\ stringEncoder
-          Bar a -> \k -> k $ "Bar" /\ a /\ intEncoder
+      ( E.sumType
+          $ toEither
+              >$< E.tagged "Foo" stringEncoder
+              >|< E.tagged "Bar" intEncoder
       )
   describe "tuple" $
     roundtripSpec

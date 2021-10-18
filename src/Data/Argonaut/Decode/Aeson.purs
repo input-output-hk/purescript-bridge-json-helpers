@@ -5,9 +5,11 @@ module Data.Argonaut.Decode.Aeson
   , either
   , enum
   , maybe
+  , null
   , record
   , rowListDecoder
   , sumType
+  , tagged
   , toTupleDecoder
   , tuple
   , tupleApply
@@ -34,8 +36,6 @@ import Data.Array (find, index)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
 import Data.Enum (class Enum, upFromIncluding)
-import Data.Map (Map)
-import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Symbol (class IsSymbol, reflectSymbol)
 import Data.Tuple (Tuple(..), fst)
@@ -50,24 +50,27 @@ import Type.Prelude (Proxy(..))
 
 type Decoder = ReaderT Json (Either JsonDecodeError)
 type JPropDecoder = ReaderT (Object Json) (Either JsonDecodeError)
+type SumTypeDecoder = ReaderT (Tuple String Json) (Either JsonDecodeError)
 type TupleDecoder = RWST (Array Json) Unit Int (Either JsonDecodeError)
 
 class ToTupleDecoder f where
   toTupleDecoder :: forall a. f a -> TupleDecoder a
 
-instance toTupleDecoderDecoder :: ToTupleDecoder (ReaderT Json (Either JsonDecodeError)) where
+instance toTupleDecoderDecoder ::
+  ToTupleDecoder (ReaderT Json (Either JsonDecodeError)) where
   toTupleDecoder decoder =
     RWST \arr i ->
       RWSResult
         (i + 1)
         <$>
           ( lmap (AtIndex i)
-            $ runReaderT decoder
-            =<< maybeToEither MissingValue (index arr i)
+              $ runReaderT decoder
+                  =<< maybeToEither MissingValue (index arr i)
           )
         <*> pure P.unit
 
-instance toTupleDecoderTupleDecoder :: ToTupleDecoder (RWST (Array Json) Unit Int (Either JsonDecodeError)) where
+instance toTupleDecoderTupleDecoder ::
+  ToTupleDecoder (RWST (Array Json) Unit Int (Either JsonDecodeError)) where
   toTupleDecoder = identity
 
 class RowListDecoder :: forall k. k -> Row Type -> Row Type -> Constraint
@@ -133,15 +136,19 @@ enum = ReaderT \json -> do
     $ find ((v == _) <<< show)
     $ upFromIncluding bottom
 
-sumType :: forall a. Map String (Decoder a) -> Decoder a
-sumType decoders = ReaderT \json -> do
+tagged :: forall a. String -> Decoder a -> SumTypeDecoder a
+tagged t decoder = ReaderT go
+  where
+  go (Tuple tag content)
+    | tag /= t = Left $ AtKey tagProp $ UnexpectedValue $ encodeString tag
+    | otherwise = lmap (AtKey contentsProp) $ runReaderT decoder content
+
+sumType :: forall a. String -> SumTypeDecoder a -> Decoder a
+sumType name decoder = ReaderT \json -> lmap (Named name) do
   obj <- decodeJObject json
   tag <- obj .: tagProp
-  contents <- obj .:? contentsProp .!= jsonNull
-  decoder <- maybeToEither (wrongTag tag) $ Map.lookup tag decoders
-  lmap (AtKey contentsProp) $ runReaderT decoder contents
-  where
-  wrongTag tag = AtKey tagProp (UnexpectedValue $ encodeString tag)
+  content <- obj .:? contentsProp .!= jsonNull
+  runReaderT decoder $ Tuple tag content
 
 record
   :: forall rl ro ri
@@ -150,24 +157,28 @@ record
   => String
   -> Record ri
   -> Decoder (Record ro)
-record name decoders =
-  ReaderT
-    $
-      lmap (Named name)
-        <<< runReaderT (rowListDecoder (Proxy :: _ rl) decoders)
-        <=< decodeJObject
+record name decoders = ReaderT $
+  lmap (Named name)
+    <<< runReaderT (rowListDecoder (Proxy :: _ rl) decoders)
+    <=< decodeJObject
 
 tupleMap :: forall f a b. ToTupleDecoder f => (a -> b) -> f a -> TupleDecoder b
 tupleMap f a = f <$> toTupleDecoder a
 
 infixl 3 tupleMap as </$\>
 
-tupleApply :: forall f a b. ToTupleDecoder f => TupleDecoder (a -> b) -> f a -> TupleDecoder b
+tupleApply
+  :: forall f a b
+   . ToTupleDecoder f
+  => TupleDecoder (a -> b)
+  -> f a
+  -> TupleDecoder b
 tupleApply f a = f <*> toTupleDecoder a
 
 infixl 3 tupleApply as </*\>
 
-tupleConjoin :: forall f a b. ToTupleDecoder f => Decoder a -> f b -> TupleDecoder (a /\ b)
+tupleConjoin
+  :: forall f a b. ToTupleDecoder f => Decoder a -> f b -> TupleDecoder (a /\ b)
 tupleConjoin d1 d2 = Tuple <$> toTupleDecoder d1 <*> toTupleDecoder d2
 
 tuple :: forall a. TupleDecoder a -> Decoder a
@@ -180,3 +191,6 @@ unit :: Decoder Unit
 unit = ReaderT \json -> P.unit <$ decodeArray
   (Left <<< UnexpectedValue)
   json
+
+null :: Decoder Unit
+null = ReaderT decodeNull
