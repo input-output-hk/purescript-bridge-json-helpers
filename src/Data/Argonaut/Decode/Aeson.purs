@@ -4,6 +4,7 @@ module Data.Argonaut.Decode.Aeson
   , Decoder
   , either
   , enum
+  , decode
   , maybe
   , null
   , record
@@ -194,3 +195,6 @@ unit = ReaderT \json -> P.unit <$ decodeArray
 
 null :: Decoder Unit
 null = ReaderT decodeNull
+
+decode :: forall a. Decoder a -> Json -> Either JsonDecodeError a
+decode = runReaderT
