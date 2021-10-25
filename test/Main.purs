@@ -13,6 +13,7 @@ import Data.Either (Either(..))
 import Data.Enum (class BoundedEnum, class Enum, Cardinality(..))
 import Data.Enum.Generic (genericPred, genericSucc)
 import Data.Generic.Rep (class Generic)
+import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (un)
 import Data.Op (Op(..))
@@ -115,8 +116,10 @@ main = launchAff_ $ runSpec [ consoleReporter ] do
   describe "sumType" $
     roundtripSpec
       ( D.sumType "SumType"
-          $ D.tagged "Foo" (Foo <$> stringDecoder)
-              <|> D.tagged "Bar" (Bar <$> intDecoder)
+          $ Map.fromFoldable
+              [ "Foo" /\ (Foo <$> stringDecoder)
+              , "Bar" /\ (Bar <$> intDecoder)
+              ]
       )
       ( Op case _ of
           Foo a -> E.encodeTagged "Foo" a stringEncoder

@@ -10,7 +10,6 @@ module Data.Argonaut.Decode.Aeson
   , record
   , rowListDecoder
   , sumType
-  , tagged
   , toTupleDecoder
   , tuple
   , tupleApply
@@ -37,7 +36,9 @@ import Data.Array (find, index)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
 import Data.Enum (class Enum, upFromIncluding)
-import Data.Maybe (Maybe(..))
+import Data.Map (Map)
+import Data.Map as Map
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Symbol (class IsSymbol, reflectSymbol)
 import Data.Tuple (Tuple(..), fst)
 import Data.Tuple.Nested (type (/\))
@@ -51,7 +52,6 @@ import Type.Prelude (Proxy(..))
 
 type Decoder = ReaderT Json (Either JsonDecodeError)
 type JPropDecoder = ReaderT (Object Json) (Either JsonDecodeError)
-type SumTypeDecoder = ReaderT (Tuple String Json) (Either JsonDecodeError)
 type TupleDecoder = RWST (Array Json) Unit Int (Either JsonDecodeError)
 
 class ToTupleDecoder f where
@@ -137,19 +137,15 @@ enum = ReaderT \json -> do
     $ find ((v == _) <<< show)
     $ upFromIncluding bottom
 
-tagged :: forall a. String -> Decoder a -> SumTypeDecoder a
-tagged t decoder = ReaderT go
-  where
-  go (Tuple tag content)
-    | tag /= t = Left $ AtKey tagProp $ UnexpectedValue $ encodeString tag
-    | otherwise = lmap (AtKey contentsProp) $ runReaderT decoder content
-
-sumType :: forall a. String -> SumTypeDecoder a -> Decoder a
-sumType name decoder = ReaderT \json -> lmap (Named name) do
+sumType :: forall a. String -> Map String (Decoder a) -> Decoder a
+sumType name decoders = ReaderT \json -> lmap (Named name) do
   obj <- decodeJObject json
   tag <- obj .: tagProp
   content <- obj .:? contentsProp .!= jsonNull
-  runReaderT decoder $ Tuple tag content
+  decoders
+    # Map.lookup tag
+    # map (flip decode content >>> lmap (AtKey contentsProp))
+    # fromMaybe (Left $ AtKey tagProp $ UnexpectedValue $ encodeString tag)
 
 record
   :: forall rl ro ri

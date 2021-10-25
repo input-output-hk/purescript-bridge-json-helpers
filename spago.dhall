@@ -7,7 +7,6 @@
   , "bifunctors"
   , "contravariant"
   , "control"
-  , "datetime"
   , "effect"
   , "either"
   , "enums"
