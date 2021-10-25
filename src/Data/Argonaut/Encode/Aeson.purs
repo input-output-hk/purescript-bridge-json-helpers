@@ -9,8 +9,7 @@ module Data.Argonaut.Encode.Aeson
   , null
   , record
   , rowListEncoder
-  , sumType
-  , tagged
+  , encodeTagged
   , tuple
   , toTupleEncoder
   , tupleDivided
@@ -18,7 +17,6 @@ module Data.Argonaut.Encode.Aeson
   , value
   , (>*<)
   , (>$<)
-  , (>|<)
   , (>/\<)
   ) where
 
@@ -29,7 +27,6 @@ import Data.Argonaut.Core (Json, fromArray, fromObject, jsonEmptyArray, jsonEmpt
 import Data.Argonaut.Encode (class EncodeJson, encodeJson, (:=), (~>))
 import Data.Argonaut.Encode.Encoders (encodeString)
 import Data.Array as Array
-import Data.Decide (chosen)
 import Data.Divide (divided)
 import Data.Either (Either(..))
 import Data.Functor.Contravariant (cmap)
@@ -39,7 +36,7 @@ import Data.Op (Op(..))
 import Data.Semigroup.Last (Last(..))
 import Data.Symbol (class IsSymbol, reflectSymbol)
 import Data.Tuple (Tuple(..))
-import Data.Tuple.Nested (type (/\), (/\))
+import Data.Tuple.Nested (type (/\))
 import Foreign.Object (Object)
 import Foreign.Object as Obj
 import Prim.Row as R
@@ -48,12 +45,9 @@ import Type.Prelude (Proxy(..))
 
 type Encoder = Op Json
 type JPropEncoder = Op (Object (Last Json))
-type SumTypeEncoder = Op (Tuple String (Last Json))
 type TupleEncoder = Op (Array Json)
 
 infixr 4 divided as >*<
-
-infixr 4 chosen as >|<
 
 infixr 4 cmap as >$<
 
@@ -115,13 +109,6 @@ either encoderA encoderB = Op case _ of
 enum :: forall a. Show a => Encoder a
 enum = Op $ encodeString <<< show
 
-tagged :: forall a. String -> Encoder a -> SumTypeEncoder a
-tagged tag = mapEncoder $ Tuple tag <<< Last
-
-sumType :: forall a. SumTypeEncoder a -> Encoder a
-sumType = mapEncoder \(tag /\ Last contents) ->
-  tagProp := tag ~> contentsProp := contents ~> jsonEmptyObject
-
 record
   :: forall rl ro ri
    . RowToList ri rl
@@ -149,6 +136,10 @@ null = Op $ const jsonNull
 
 encode :: forall a b. Op a b -> b -> a
 encode = unwrap
+
+encodeTagged :: forall a. String -> a -> Encoder a -> Json
+encodeTagged tag a encoder =
+  tagProp := tag ~> contentsProp := encode encoder a ~> jsonEmptyObject
 
 mapEncoder :: forall a b c. (a -> b) -> Op a c -> Op b c
 mapEncoder = over Op <<< map

@@ -6,7 +6,7 @@ import Control.Alt ((<|>))
 import Control.Monad.Reader (runReaderT)
 import Data.Argonaut.Decode.Aeson (Decoder, (</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
-import Data.Argonaut.Encode.Aeson (Encoder, (>$<), (>/\<), (>|<))
+import Data.Argonaut.Encode.Aeson (Encoder, (>$<), (>/\<))
 import Data.Argonaut.Encode.Aeson as E
 import Data.Bounded.Generic (genericBottom, genericTop)
 import Data.Either (Either(..))
@@ -112,19 +112,15 @@ main = launchAff_ $ runSpec [ consoleReporter ] do
     roundtripSpec
       (D.record "Test" { foo: D.maybe intDecoder, bar: stringDecoder })
       (E.record { foo: E.maybe intEncoder, bar: stringEncoder })
-  describe "sumType" do
-    let
-      toEither (Foo a) = Left a
-      toEither (Bar a) = Right a
+  describe "sumType" $
     roundtripSpec
       ( D.sumType "SumType"
           $ D.tagged "Foo" (Foo <$> stringDecoder)
               <|> D.tagged "Bar" (Bar <$> intDecoder)
       )
-      ( E.sumType
-          $ toEither
-              >$< E.tagged "Foo" stringEncoder
-              >|< E.tagged "Bar" intEncoder
+      ( Op case _ of
+          Foo a -> E.encodeTagged "Foo" a stringEncoder
+          Bar a -> E.encodeTagged "Bar" a intEncoder
       )
   describe "tuple" $
     roundtripSpec
