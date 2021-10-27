@@ -8,6 +8,7 @@ module Data.Argonaut.Decode.Aeson
   , decode
   , maybe
   , null
+  , object
   , record
   , rowListDecoder
   , sumType
@@ -152,6 +153,17 @@ content decoder = ReaderT \obj -> do
   contents <- obj .: contentsProp
   lmap (AtKey contentsProp) $ decode decoder contents
 
+object
+  :: forall rl ro ri
+   . RowToList ri rl
+  => RowListDecoder rl ri ro
+  => String
+  -> Record ri
+  -> JPropDecoder (Record ro)
+object name decoders = ReaderT $
+  lmap (Named name)
+    <<< runReaderT (rowListDecoder (Proxy :: _ rl) decoders)
+
 record
   :: forall rl ro ri
    . RowToList ri rl
@@ -159,10 +171,7 @@ record
   => String
   -> Record ri
   -> Decoder (Record ro)
-record name decoders = ReaderT $
-  lmap (Named name)
-    <<< runReaderT (rowListDecoder (Proxy :: _ rl) decoders)
-    <=< decodeJObject
+record name decoders = ReaderT $ runReaderT (object name decoders) <=< decodeJObject
 
 tupleMap :: forall f a b. ToTupleDecoder f => (a -> b) -> f a -> TupleDecoder b
 tupleMap f a = f <$> toTupleDecoder a
