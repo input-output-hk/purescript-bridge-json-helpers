@@ -2,7 +2,6 @@ module Test.Main where
 
 import Prelude
 
-import Control.Alt ((<|>))
 import Control.Monad.Reader (runReaderT)
 import Data.Argonaut.Decode.Aeson (Decoder, (</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
@@ -111,8 +110,8 @@ main = launchAff_ $ runSpec [ consoleReporter ] do
   describe "maybe" $ roundtripSpec (D.maybe intDecoder) (E.maybe intEncoder)
   describe "record" $
     roundtripSpec
-      (D.record "Test" (Just "_prefix") { foo: D.maybe intDecoder, bar: stringDecoder })
-      (E.record (Just "_prefix") { foo: E.maybe intEncoder, bar: stringEncoder })
+      (D.record "Test" (Just "_prefix") { _prefixFoo: D.maybe intDecoder, _prefixBar: stringDecoder })
+      (E.record (Just "_prefix") { _prefixFoo: E.maybe intEncoder, _prefixBar: stringEncoder })
   describe "sumType" $
     roundtripSpec
       ( D.sumType "SumType"

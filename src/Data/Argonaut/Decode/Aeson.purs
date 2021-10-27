@@ -29,7 +29,7 @@ import Prelude hiding (unit)
 import Control.Alt ((<|>))
 import Control.Monad.RWS (RWSResult(..), RWST(..), evalRWST)
 import Control.Monad.Reader (ReaderT(..), runReaderT)
-import Data.Argonaut.Aeson (capitalize, contentsProp, leftProp, maybeToEither, rightProp, tagProp, unconsRecord)
+import Data.Argonaut.Aeson (camelCase, contentsProp, leftProp, maybeToEither, rightProp, tagProp, unconsRecord)
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (class DecodeJson, JsonDecodeError(..), decodeJson, (.:))
 import Data.Argonaut.Decode.Decoders (decodeArray, decodeJArray, decodeJObject, decodeNull, decodeString)
@@ -41,6 +41,7 @@ import Data.Enum (class Enum, upFromIncluding)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe)
+import Data.String (Pattern(..), stripPrefix)
 import Data.Symbol (class IsSymbol, reflectSymbol)
 import Data.Tuple (Tuple(..), fst)
 import Data.Tuple.Nested (type (/\))
@@ -109,9 +110,9 @@ propDecoder
   -> JPropDecoder a
 propDecoder mPrefix p decoder =
   let
-    key = case mPrefix of
-      Just prefix -> prefix <> capitalize (reflectSymbol p)
-      Nothing -> reflectSymbol p
+    key = fromMaybe (reflectSymbol p) do
+      prefix <- mPrefix
+      camelCase <$> stripPrefix (Pattern prefix) (reflectSymbol p)
   in
     ReaderT $
       lmap (AtKey key)

@@ -22,7 +22,7 @@ module Data.Argonaut.Encode.Aeson
 
 import Prelude
 
-import Data.Argonaut.Aeson (capitalize, contentsProp, leftProp, rightProp, tagProp, unconsRecord)
+import Data.Argonaut.Aeson (camelCase, contentsProp, leftProp, rightProp, tagProp, unconsRecord)
 import Data.Argonaut.Core (Json, fromArray, fromObject, jsonEmptyArray, jsonEmptyObject, jsonNull)
 import Data.Argonaut.Encode (class EncodeJson, encodeJson, (:=), (~>))
 import Data.Argonaut.Encode.Encoders (encodeString)
@@ -30,10 +30,11 @@ import Data.Array as Array
 import Data.Divide (divided)
 import Data.Either (Either(..))
 import Data.Functor.Contravariant (cmap)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (over, unwrap)
 import Data.Op (Op(..))
 import Data.Semigroup.Last (Last(..))
+import Data.String (Pattern(..), stripPrefix)
 import Data.Symbol (class IsSymbol, reflectSymbol)
 import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested (type (/\))
@@ -93,9 +94,9 @@ propEncoder
   -> JPropEncoder a
 propEncoder mPrefix p encoder =
   let
-    key = case mPrefix of
-      Just prefix -> prefix <> capitalize (reflectSymbol p)
-      Nothing -> reflectSymbol p
+    key = fromMaybe (reflectSymbol p) do
+      prefix <- mPrefix
+      camelCase <$> stripPrefix (Pattern prefix) (reflectSymbol p)
   in
     Op $ Obj.singleton key <<< Last <<< encode encoder
 
