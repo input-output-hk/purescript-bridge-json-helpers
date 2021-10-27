@@ -117,8 +117,8 @@ main = launchAff_ $ runSpec [ consoleReporter ] do
     roundtripSpec
       ( D.sumType "SumType"
           $ Map.fromFoldable
-              [ "Foo" /\ (Foo <$> stringDecoder)
-              , "Bar" /\ (Bar <$> intDecoder)
+              [ "Foo" /\ D.content (Foo <$> stringDecoder)
+              , "Bar" /\ D.content (Bar <$> intDecoder)
               ]
       )
       ( Op case _ of

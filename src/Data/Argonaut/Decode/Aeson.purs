@@ -2,6 +2,7 @@ module Data.Argonaut.Decode.Aeson
   ( class RowListDecoder
   , class ToTupleDecoder
   , Decoder
+  , content
   , either
   , enum
   , decode
@@ -28,8 +29,8 @@ import Control.Alt ((<|>))
 import Control.Monad.RWS (RWSResult(..), RWST(..), evalRWST)
 import Control.Monad.Reader (ReaderT(..), runReaderT)
 import Data.Argonaut.Aeson (contentsProp, leftProp, maybeToEither, rightProp, tagProp, unconsRecord)
-import Data.Argonaut.Core (Json, jsonNull)
-import Data.Argonaut.Decode (class DecodeJson, JsonDecodeError(..), decodeJson, (.!=), (.:), (.:?))
+import Data.Argonaut.Core (Json)
+import Data.Argonaut.Decode (class DecodeJson, JsonDecodeError(..), decodeJson, (.:))
 import Data.Argonaut.Decode.Decoders (decodeArray, decodeJArray, decodeJObject, decodeNull, decodeString)
 import Data.Argonaut.Encode.Encoders (encodeString)
 import Data.Array (find, index)
@@ -137,15 +138,19 @@ enum = ReaderT \json -> do
     $ find ((v == _) <<< show)
     $ upFromIncluding bottom
 
-sumType :: forall a. String -> Map String (Decoder a) -> Decoder a
+sumType :: forall a. String -> Map String (JPropDecoder a) -> Decoder a
 sumType name decoders = ReaderT \json -> lmap (Named name) do
   obj <- decodeJObject json
   tag <- obj .: tagProp
-  content <- obj .:? contentsProp .!= jsonNull
   decoders
     # Map.lookup tag
-    # map (flip decode content >>> lmap (AtKey contentsProp))
+    # map (flip runReaderT obj)
     # fromMaybe (Left $ AtKey tagProp $ UnexpectedValue $ encodeString tag)
+
+content :: forall a. Decoder a -> JPropDecoder a
+content decoder = ReaderT \obj -> do
+  contents <- obj .: contentsProp
+  lmap (AtKey contentsProp) $ decode decoder contents
 
 record
   :: forall rl ro ri
