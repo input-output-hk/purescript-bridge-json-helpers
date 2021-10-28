@@ -5,7 +5,6 @@ import Prelude
 import Data.Either (Either(..))
 import Data.Maybe (Maybe, maybe)
 import Data.Profunctor (class Profunctor, dimap)
-import Data.String (singleton, toUpper, uncons)
 import Data.Symbol (class IsSymbol)
 import Data.Tuple (Tuple(..))
 import Prim.Row (class Cons, class Lacks)
@@ -46,7 +45,3 @@ cmapP :: forall p a b c. Profunctor p => (b -> a) -> p a c -> p b c
 cmapP f = dimap f identity
 
 infixr 1 cmapP as >$$$<
-
-capitalize :: String -> String
-capitalize s = maybe s capitalizeParts $ uncons s
-  where capitalizeParts { head, tail } = toUpper (singleton head) <> tail

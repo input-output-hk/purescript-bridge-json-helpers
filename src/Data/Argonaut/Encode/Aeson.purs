@@ -22,7 +22,7 @@ module Data.Argonaut.Encode.Aeson
 
 import Prelude
 
-import Data.Argonaut.Aeson (capitalize, contentsProp, leftProp, rightProp, tagProp, unconsRecord)
+import Data.Argonaut.Aeson (contentsProp, leftProp, rightProp, tagProp, unconsRecord)
 import Data.Argonaut.Core (Json, fromArray, fromObject, jsonEmptyArray, jsonEmptyObject, jsonNull)
 import Data.Argonaut.Encode (class EncodeJson, encodeJson, (:=), (~>))
 import Data.Argonaut.Encode.Encoders (encodeString)
@@ -62,10 +62,10 @@ instance toTupleEncoderTupleEncoder :: ToTupleEncoder (Op (Array Json)) where
 
 class RowListEncoder :: forall k. k -> Row Type -> Row Type -> Constraint
 class RowListEncoder rl ri ro | rl -> ri ro where
-  rowListEncoder :: Maybe String -> Proxy rl -> Record ri -> JPropEncoder (Record ro)
+  rowListEncoder :: Proxy rl -> Record ri -> JPropEncoder (Record ro)
 
 instance rowListEncoderNil :: RowListEncoder Nil () () where
-  rowListEncoder _ _ _ = Op $ const Obj.empty
+  rowListEncoder _ _ = Op $ const Obj.empty
 
 instance rowListEncoderEncoderCons ::
   ( IsSymbol prop
@@ -76,28 +76,22 @@ instance rowListEncoderEncoderCons ::
   , RowListEncoder tail tailEncoders tailValues
   ) =>
   RowListEncoder (Cons prop (Encoder a) tail) encoders values where
-  rowListEncoder prefix _ encoders =
+  rowListEncoder _ encoders =
     let
       Tuple valueEncoder tailEncoders = unconsRecord (Proxy :: _ prop) encoders
     in
       unconsRecord (Proxy :: _ prop)
-        >$< propEncoder prefix (Proxy :: _ prop) valueEncoder
-        >*< rowListEncoder prefix (Proxy :: _ tail) tailEncoders
+        >$< propEncoder (Proxy :: _ prop) valueEncoder
+        >*< rowListEncoder (Proxy :: _ tail) tailEncoders
 
 propEncoder
   :: forall p a
    . IsSymbol p
-  => Maybe String
-  -> Proxy p
+  => Proxy p
   -> Encoder a
   -> JPropEncoder a
-propEncoder mPrefix p encoder =
-  let
-    key = case mPrefix of
-      Just prefix -> prefix <> capitalize (reflectSymbol p)
-      Nothing -> reflectSymbol p
-  in
-    Op $ Obj.singleton key <<< Last <<< encode encoder
+propEncoder p encoder =
+  Op $ Obj.singleton (reflectSymbol p) <<< Last <<< encode encoder
 
 value :: forall a. EncodeJson a => Encoder a
 value = Op $ encodeJson
@@ -119,11 +113,10 @@ record
   :: forall rl ro ri
    . RowToList ri rl
   => RowListEncoder rl ri ro
-  => Maybe String
-  -> Record ri
+  => Record ri
   -> Encoder (Record ro)
-record prefix encoders =
-  mapEncoder (fromObject <<< map unwrap) $ rowListEncoder prefix (Proxy :: _ rl)
+record encoders =
+  mapEncoder (fromObject <<< map unwrap) $ rowListEncoder (Proxy :: _ rl)
     encoders
 
 tupleDivided

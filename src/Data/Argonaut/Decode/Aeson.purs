@@ -29,7 +29,7 @@ import Prelude hiding (unit)
 import Control.Alt ((<|>))
 import Control.Monad.RWS (RWSResult(..), RWST(..), evalRWST)
 import Control.Monad.Reader (ReaderT(..), runReaderT)
-import Data.Argonaut.Aeson (capitalize, contentsProp, leftProp, maybeToEither, rightProp, tagProp, unconsRecord)
+import Data.Argonaut.Aeson (contentsProp, leftProp, maybeToEither, rightProp, tagProp, unconsRecord)
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (class DecodeJson, JsonDecodeError(..), decodeJson, (.:))
 import Data.Argonaut.Decode.Decoders (decodeArray, decodeJArray, decodeJObject, decodeNull, decodeString)
@@ -78,10 +78,10 @@ instance toTupleDecoderTupleDecoder ::
 
 class RowListDecoder :: forall k. k -> Row Type -> Row Type -> Constraint
 class RowListDecoder rl ri ro | rl -> ri ro where
-  rowListDecoder :: Maybe String -> Proxy rl -> Record ri -> JPropDecoder (Record ro)
+  rowListDecoder :: Proxy rl -> Record ri -> JPropDecoder (Record ro)
 
 instance rowListDecoderNil :: RowListDecoder Nil () () where
-  rowListDecoder _ _ _ = pure {}
+  rowListDecoder _ _ = pure {}
 
 instance rowListDecoderDecoderCons ::
   ( IsSymbol prop
@@ -92,31 +92,29 @@ instance rowListDecoderDecoderCons ::
   , RowListDecoder tail tailDecoders tailValues
   ) =>
   RowListDecoder (Cons prop (Decoder a) tail) decoders values where
-  rowListDecoder prefix _ decoders =
+  rowListDecoder _ decoders =
     let
       Tuple valueDecoder tailDecoders = unconsRecord (Proxy :: _ prop) decoders
     in
       Rec.insert (Proxy :: _ prop)
-        <$> propDecoder prefix (Proxy :: _ prop) valueDecoder
-        <*> rowListDecoder prefix (Proxy :: _ tail) tailDecoders
+        <$> propDecoder (Proxy :: _ prop) valueDecoder
+        <*> rowListDecoder (Proxy :: _ tail) tailDecoders
 
 propDecoder
   :: forall p a
    . IsSymbol p
-  => Maybe String
-  -> Proxy p
+  => Proxy p
   -> Decoder a
   -> JPropDecoder a
-propDecoder mPrefix p decoder =
+propDecoder p decoder =
   let
-    key = case mPrefix of
-      Just prefix -> prefix <> capitalize (reflectSymbol p)
-      Nothing -> reflectSymbol p
+    key = reflectSymbol p
   in
     ReaderT $
       lmap (AtKey key)
-        <<< ((runReaderT decoder) <=< maybeToEither MissingValue)
-        <<< Obj.lookup key
+        <<< (runReaderT decoder)
+        <=< maybeToEither MissingValue
+          <<< Obj.lookup key
 
 value :: forall a. DecodeJson a => Decoder a
 value = ReaderT $ decodeJson
@@ -160,22 +158,20 @@ object
    . RowToList ri rl
   => RowListDecoder rl ri ro
   => String
-  -> Maybe String
   -> Record ri
   -> JPropDecoder (Record ro)
-object name prefix decoders = ReaderT $
+object name decoders = ReaderT $
   lmap (Named name)
-    <<< runReaderT (rowListDecoder prefix (Proxy :: _ rl) decoders)
+    <<< runReaderT (rowListDecoder (Proxy :: _ rl) decoders)
 
 record
   :: forall rl ro ri
    . RowToList ri rl
   => RowListDecoder rl ri ro
   => String
-  -> Maybe String
   -> Record ri
   -> Decoder (Record ro)
-record name prefix decoders = ReaderT $ runReaderT (object name prefix decoders) <=< decodeJObject
+record name decoders = ReaderT $ runReaderT (object name decoders) <=< decodeJObject
 
 tupleMap :: forall f a b. ToTupleDecoder f => (a -> b) -> f a -> TupleDecoder b
 tupleMap f a = f <$> toTupleDecoder a

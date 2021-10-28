@@ -111,8 +111,8 @@ main = launchAff_ $ runSpec [ consoleReporter ] do
   describe "maybe" $ roundtripSpec (D.maybe intDecoder) (E.maybe intEncoder)
   describe "record" $
     roundtripSpec
-      (D.record "Test" (Just "_prefix") { foo: D.maybe intDecoder, bar: stringDecoder })
-      (E.record (Just "_prefix") { foo: E.maybe intEncoder, bar: stringEncoder })
+      (D.record "Test" { foo: D.maybe intDecoder, bar: stringDecoder })
+      (E.record { foo: E.maybe intEncoder, bar: stringEncoder })
   describe "sumType" $
     roundtripSpec
       ( D.sumType "SumType"
