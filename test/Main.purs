@@ -155,8 +155,8 @@ main = launchAff_ $ runSpec [ consoleReporter ] do
   describe "unit" $ roundtripSpec D.unit E.unit
   describe "dictionary" $
     roundtripSpec
-      (Map <$> D.dictionary Just intDecoder)
-      (un Map >$< E.dictionary identity intEncoder)
+      (Map <$> D.dictionary stringDecoder intDecoder)
+      (un Map >$< E.dictionary stringEncoder intEncoder)
 
 roundtripSpec
   :: forall a

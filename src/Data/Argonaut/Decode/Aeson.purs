@@ -137,8 +137,8 @@ either decoderA decoderB = ReaderT $ decodeJObject >=>
   decodeRight obj = obj .: rightProp >>= runReaderT decoderB
 
 dictionary
-  :: forall a b. Ord a => (String -> Maybe a) -> Decoder b -> Decoder (Map a b)
-dictionary readA decoderB = ReaderT
+  :: forall a b. Ord a => Decoder a -> Decoder b -> Decoder (Map a b)
+dictionary decoderA decoderB = ReaderT
   $ map Map.fromFoldable
       <<< bindFlipped decodePairs
       <<< map toUnfoldable
@@ -147,12 +147,9 @@ dictionary readA decoderB = ReaderT
   decodePairs
     :: Array (Tuple String Json) -> Either JsonDecodeError (Array (Tuple a b))
   decodePairs = traverse decodePair
-  decodePair t@(Tuple key _) = lmap (AtKey key) $ bitraverse decodeKey
-    (decode decoderB)
-    t
-  decodeKey key = case readA key of
-    Nothing -> Left $ UnexpectedValue $ fromString key
-    Just a -> Right a
+  decodePair t@(Tuple key _) =
+    lmap (AtKey key)
+    $ bitraverse (decode decoderA <<< fromString) (decode decoderB) t
 
 enum :: forall a. Enum a => Bounded a => Show a => Decoder a
 enum = ReaderT \json -> do
