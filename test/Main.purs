@@ -2,7 +2,6 @@ module Test.Main where
 
 import Prelude
 
-import Control.Alt ((<|>))
 import Control.Monad.Reader (runReaderT)
 import Data.Argonaut.Decode.Aeson (Decoder, (</$\>), (</*\>), (</\>))
 import Data.Argonaut.Decode.Aeson as D
@@ -15,20 +14,40 @@ import Data.Enum.Generic (genericPred, genericSucc)
 import Data.Generic.Rep (class Generic)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
-import Data.Newtype (un)
+import Data.Newtype (class Newtype, un)
 import Data.Op (Op(..))
 import Data.Show.Generic (genericShow)
 import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
 import Effect.Aff (launchAff_)
-import Test.QuickCheck (class Arbitrary, (===))
+import Test.QuickCheck (class Arbitrary, arbitrary, (===))
 import Test.QuickCheck.Arbitrary (genericArbitrary)
-import Test.QuickCheck.Gen (enum)
+import Test.QuickCheck.Gen (Gen, enum)
 import Test.Spec (Spec, describe, it)
 import Test.Spec.QuickCheck (quickCheck)
 import Test.Spec.Reporter (consoleReporter)
 import Test.Spec.Runner (runSpec)
+
+newtype Map k v = Map (Map.Map k v)
+
+derive instance genericMap :: Generic (Map k v) _
+
+derive instance newtypeMap :: Newtype (Map k v) _
+
+derive instance eqMap :: (Eq k, Eq v) => Eq (Map k v)
+
+instance showMap :: (Show k, Show v) => Show (Map k v) where
+  show = genericShow
+
+instance arbitraryMap ::
+  ( Ord k
+  , Arbitrary k
+  , Arbitrary v
+  ) =>
+  Arbitrary (Map k v) where
+  arbitrary =
+    Map <<< Map.fromFoldable <$> (arbitrary :: Gen (Array (Tuple k v)))
 
 data Product = P Int String
 
@@ -134,6 +153,10 @@ main = launchAff_ $ runSpec [ consoleReporter ] do
       (D.tuple $ P </$\> intDecoder </*\> stringDecoder)
       (E.tuple $ pToTuple >$< intEncoder >/\< stringEncoder)
   describe "unit" $ roundtripSpec D.unit E.unit
+  describe "dictionary" $
+    roundtripSpec
+      (Map <$> D.dictionary Just intDecoder)
+      (un Map >$< E.dictionary identity intEncoder)
 
 roundtripSpec
   :: forall a

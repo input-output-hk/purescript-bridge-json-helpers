@@ -3,6 +3,7 @@ module Data.Argonaut.Decode.Aeson
   , class ToTupleDecoder
   , Decoder
   , content
+  , dictionary
   , either
   , enum
   , decode
@@ -27,24 +28,27 @@ module Data.Argonaut.Decode.Aeson
 import Prelude hiding (unit)
 
 import Control.Alt ((<|>))
+import Control.Bind (bindFlipped)
 import Control.Monad.RWS (RWSResult(..), RWST(..), evalRWST)
 import Control.Monad.Reader (ReaderT(..), runReaderT)
 import Data.Argonaut.Aeson (contentsProp, leftProp, maybeToEither, rightProp, tagProp, unconsRecord)
-import Data.Argonaut.Core (Json)
+import Data.Argonaut.Core (Json, fromString)
 import Data.Argonaut.Decode (class DecodeJson, JsonDecodeError(..), decodeJson, (.:))
 import Data.Argonaut.Decode.Decoders (decodeArray, decodeJArray, decodeJObject, decodeNull, decodeString)
 import Data.Argonaut.Encode.Encoders (encodeString)
 import Data.Array (find, index)
 import Data.Bifunctor (lmap)
+import Data.Bitraversable (bitraverse)
 import Data.Either (Either(..))
 import Data.Enum (class Enum, upFromIncluding)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Symbol (class IsSymbol, reflectSymbol)
+import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..), fst)
 import Data.Tuple.Nested (type (/\))
-import Foreign.Object (Object)
+import Foreign.Object (Object, toUnfoldable)
 import Foreign.Object as Obj
 import Prelude (unit) as P
 import Prim.Row as R
@@ -132,6 +136,24 @@ either decoderA decoderB = ReaderT $ decodeJObject >=>
   decodeLeft obj = obj .: leftProp >>= runReaderT decoderA
   decodeRight obj = obj .: rightProp >>= runReaderT decoderB
 
+dictionary
+  :: forall a b. Ord a => (String -> Maybe a) -> Decoder b -> Decoder (Map a b)
+dictionary readA decoderB = ReaderT
+  $ map Map.fromFoldable
+      <<< bindFlipped decodePairs
+      <<< map toUnfoldable
+      <<< decodeJObject
+  where
+  decodePairs
+    :: Array (Tuple String Json) -> Either JsonDecodeError (Array (Tuple a b))
+  decodePairs = traverse decodePair
+  decodePair t@(Tuple key _) = lmap (AtKey key) $ bitraverse decodeKey
+    (decode decoderB)
+    t
+  decodeKey key = case readA key of
+    Nothing -> Left $ UnexpectedValue $ fromString key
+    Just a -> Right a
+
 enum :: forall a. Enum a => Bounded a => Show a => Decoder a
 enum = ReaderT \json -> do
   v <- decodeString json
@@ -171,7 +193,8 @@ record
   => String
   -> Record ri
   -> Decoder (Record ro)
-record name decoders = ReaderT $ runReaderT (object name decoders) <=< decodeJObject
+record name decoders = ReaderT $ runReaderT (object name decoders) <=<
+  decodeJObject
 
 tupleMap :: forall f a b. ToTupleDecoder f => (a -> b) -> f a -> TupleDecoder b
 tupleMap f a = f <$> toTupleDecoder a

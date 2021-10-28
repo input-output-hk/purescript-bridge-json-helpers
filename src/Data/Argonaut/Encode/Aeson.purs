@@ -2,6 +2,7 @@ module Data.Argonaut.Encode.Aeson
   ( class RowListEncoder
   , class ToTupleEncoder
   , Encoder
+  , dictionary
   , either
   , encode
   , enum
@@ -27,9 +28,11 @@ import Data.Argonaut.Core (Json, fromArray, fromObject, jsonEmptyArray, jsonEmpt
 import Data.Argonaut.Encode (class EncodeJson, encodeJson, (:=), (~>))
 import Data.Argonaut.Encode.Encoders (encodeString)
 import Data.Array as Array
+import Data.Bifunctor (bimap)
 import Data.Divide (divided)
 import Data.Either (Either(..))
 import Data.Functor.Contravariant (cmap)
+import Data.Map (Map, toUnfoldable)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (over, unwrap)
 import Data.Op (Op(..))
@@ -37,7 +40,7 @@ import Data.Semigroup.Last (Last(..))
 import Data.Symbol (class IsSymbol, reflectSymbol)
 import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested (type (/\))
-import Foreign.Object (Object)
+import Foreign.Object (Object, fromFoldable)
 import Foreign.Object as Obj
 import Prim.Row as R
 import Prim.RowList (class RowToList, Cons, Nil)
@@ -105,6 +108,12 @@ either :: forall a b. Encoder a -> Encoder b -> Encoder (Either a b)
 either encoderA encoderB = Op case _ of
   Left a -> leftProp := encode encoderA a ~> jsonEmptyObject
   Right b -> rightProp := encode encoderB b ~> jsonEmptyObject
+
+dictionary :: forall a b. (a -> String) -> Encoder b -> Encoder (Map a b)
+dictionary writeA encoderB = Op $ toPairs >>> fromFoldable >>> fromObject
+  where
+  toPairs :: Map a b -> Array (Tuple String Json)
+  toPairs = map (bimap writeA (encode encoderB)) <<< toUnfoldable
 
 enum :: forall a. Show a => Encoder a
 enum = Op $ encodeString <<< show
