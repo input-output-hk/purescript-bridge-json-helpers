@@ -153,10 +153,18 @@ main = launchAff_ $ runSpec [ consoleReporter ] do
       (D.tuple $ P </$\> intDecoder </*\> stringDecoder)
       (E.tuple $ pToTuple >$< intEncoder >/\< stringEncoder)
   describe "unit" $ roundtripSpec D.unit E.unit
-  describe "dictionary" $
+  describe "dictionary (string keys)" $
     roundtripSpec
       (Map <$> D.dictionary stringDecoder intDecoder)
       (un Map >$< E.dictionary stringEncoder intEncoder)
+  describe "dictionary (int keys)" $
+    roundtripSpec
+      (Map <$> D.dictionary intDecoder intDecoder)
+      (un Map >$< E.dictionary intEncoder intEncoder)
+  describe "dictionary (complex keys)" $
+    roundtripSpec
+      (Map <$> D.dictionary (D.maybe stringDecoder) intDecoder)
+      (un Map >$< E.dictionary (E.maybe stringEncoder) intEncoder)
 
 roundtripSpec
   :: forall a

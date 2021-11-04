@@ -28,7 +28,6 @@ module Data.Argonaut.Decode.Aeson
 import Prelude hiding (unit)
 
 import Control.Alt ((<|>))
-import Control.Bind (bindFlipped)
 import Control.Monad.RWS (RWSResult(..), RWST(..), evalRWST)
 import Control.Monad.Reader (ReaderT(..), runReaderT)
 import Data.Argonaut.Aeson (contentsProp, leftProp, maybeToEither, rightProp, tagProp, unconsRecord)
@@ -139,10 +138,10 @@ either decoderA decoderB = ReaderT $ decodeJObject >=>
 dictionary
   :: forall a b. Ord a => Decoder a -> Decoder b -> Decoder (Map a b)
 dictionary decoderA decoderB = ReaderT \a ->
-    caseJsonObject (readArray a) readObject a
+    map Map.fromFoldable $ caseJsonObject (readArray a) readObject a
   where
-  readObject = map Map.fromFoldable <<< decodePairs <<< toUnfoldable
-  readArray = map Map.fromFoldable <<< bindFlipped decodePairs <<< decodeJson
+  readArray = decodeArray $ decode $ tuple $ decoderA </\> decoderB
+  readObject = decodePairs <<< toUnfoldable
   decodePairs
     :: Array (Tuple String Json) -> Either JsonDecodeError (Array (Tuple a b))
   decodePairs = traverse decodePair
