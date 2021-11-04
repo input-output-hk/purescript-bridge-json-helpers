@@ -32,7 +32,7 @@ import Control.Bind (bindFlipped)
 import Control.Monad.RWS (RWSResult(..), RWST(..), evalRWST)
 import Control.Monad.Reader (ReaderT(..), runReaderT)
 import Data.Argonaut.Aeson (contentsProp, leftProp, maybeToEither, rightProp, tagProp, unconsRecord)
-import Data.Argonaut.Core (Json, fromString)
+import Data.Argonaut.Core (Json, caseJsonObject, fromString)
 import Data.Argonaut.Decode (class DecodeJson, JsonDecodeError(..), decodeJson, (.:))
 import Data.Argonaut.Decode.Decoders (decodeArray, decodeJArray, decodeJObject, decodeNull, decodeString)
 import Data.Argonaut.Encode.Encoders (encodeString)
@@ -138,12 +138,11 @@ either decoderA decoderB = ReaderT $ decodeJObject >=>
 
 dictionary
   :: forall a b. Ord a => Decoder a -> Decoder b -> Decoder (Map a b)
-dictionary decoderA decoderB = ReaderT
-  $ map Map.fromFoldable
-      <<< bindFlipped decodePairs
-      <<< map toUnfoldable
-      <<< decodeJObject
+dictionary decoderA decoderB = ReaderT \a ->
+    caseJsonObject (readArray a) readObject a
   where
+  readObject = map Map.fromFoldable <<< decodePairs <<< toUnfoldable
+  readArray = map Map.fromFoldable <<< bindFlipped decodePairs <<< decodeJson
   decodePairs
     :: Array (Tuple String Json) -> Either JsonDecodeError (Array (Tuple a b))
   decodePairs = traverse decodePair

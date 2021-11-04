@@ -24,7 +24,7 @@ module Data.Argonaut.Encode.Aeson
 import Prelude
 
 import Data.Argonaut.Aeson (contentsProp, leftProp, rightProp, tagProp, unconsRecord)
-import Data.Argonaut.Core (Json, caseJsonString, fromArray, fromObject, jsonEmptyArray, jsonEmptyObject, jsonNull, stringify)
+import Data.Argonaut.Core (Json, fromArray, fromObject, jsonEmptyArray, jsonEmptyObject, jsonNull)
 import Data.Argonaut.Encode (class EncodeJson, encodeJson, (:=), (~>))
 import Data.Argonaut.Encode.Encoders (encodeString)
 import Data.Array as Array
@@ -40,7 +40,7 @@ import Data.Semigroup.Last (Last(..))
 import Data.Symbol (class IsSymbol, reflectSymbol)
 import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested (type (/\))
-import Foreign.Object (Object, fromFoldable)
+import Foreign.Object (Object)
 import Foreign.Object as Obj
 import Prim.Row as R
 import Prim.RowList (class RowToList, Cons, Nil)
@@ -110,11 +110,10 @@ either encoderA encoderB = Op case _ of
   Right b -> rightProp := encode encoderB b ~> jsonEmptyObject
 
 dictionary :: forall a b. Encoder a -> Encoder b -> Encoder (Map a b)
-dictionary encoderA encoderB = Op $ toPairs >>> fromFoldable >>> fromObject
+dictionary encoderA encoderB = Op $ toPairs >>> encodeJson
   where
-  toPairs :: Map a b -> Array (Tuple String Json)
-  toPairs = map (bimap (toString <<< encode encoderA) (encode encoderB)) <<< toUnfoldable
-  toString json = caseJsonString (stringify json) identity json
+  toPairs :: Map a b -> Array (Tuple Json Json)
+  toPairs = map (bimap (encode encoderA) (encode encoderB)) <<< toUnfoldable
 
 enum :: forall a. Show a => Encoder a
 enum = Op $ encodeString <<< show

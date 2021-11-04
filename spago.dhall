@@ -10,6 +10,7 @@
   , "effect"
   , "either"
   , "enums"
+  , "foldable-traversable"
   , "foreign-object"
   , "maybe"
   , "newtype"
