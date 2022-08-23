@@ -28,7 +28,7 @@ import Data.Argonaut.Core (Json, caseJson, fromArray, fromObject, jsonEmptyArray
 import Data.Argonaut.Encode (class EncodeJson, encodeJson, (:=), (~>))
 import Data.Argonaut.Encode.Encoders (encodeString)
 import Data.Array as Array
-import Data.Bifunctor (bimap, lmap)
+import Data.Bifunctor (bimap)
 import Data.Bitraversable (ltraverse)
 import Data.Divide (divided)
 import Data.Either (Either(..))
@@ -122,11 +122,11 @@ dictionary encoderA encoderB = Op $ toPairs >>> encodePairs
     Just pairs' -> fromObject $ fromFoldable pairs'
   tryString =
     caseJson
-      (const Nothing) 
-      (const Nothing) 
-      (const Nothing) 
-      (Just) 
-      (const Nothing) 
+      (const Nothing)
+      (const Nothing)
+      (const Nothing)
+      (Just)
+      (const Nothing)
       (const Nothing)
 
 
